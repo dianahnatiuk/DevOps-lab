@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]          # push у будь-яку гілку
+  pull_request:
+    branches: [main]          # будь-яка зміна у Pull Request до main
+
+# Скасовуємо застарілі запуски для тієї ж гілки/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  LOCAL_IMAGE: devops-lab:ci
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # 1) Сервіс app: Lint -> Build -> Test
+  # ────────────────────────────────────────────────────────────
+  build-test:
+    name: build-test
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: myappdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user -d myappdb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://user:password@localhost:5432/myappdb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip                              # кешування pip-залежностей
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+
+      # Статичний аналіз — блокуючий крок.
+      # Формат github показує помилки анотаціями прямо у Pull Request.
+      - name: Lint (Ruff)
+        run: ruff check --output-format=github .
+
+      - name: Build (compile + dependency check)
+        run: |
+          pip check
+          python -m compileall -q app
+
+      - name: Test (pytest)
+        run: python -m pytest -v
+
+  # ────────────────────────────────────────────────────────────
+  # 2) Збірка Docker-образу (лише локально) + сканування Trivy
+  # ────────────────────────────────────────────────────────────
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.LOCAL_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Блокуючий крок: CRITICAL/HIGH вразливості з наявним фіксом => помилка
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          # запасні джерела бази вразливостей, якщо основне недоступне
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+          TRIVY_SKIP_JAVA_DB_UPDATE: "true"
+        with:
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          format: table
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # ────────────────────────────────────────────────────────────
+  # 3) Публікація в GitHub Container Registry (лише для push)
+  # ────────────────────────────────────────────────────────────
+  publish:
+    name: publish
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Назва образу в ghcr.io має бути в нижньому регістрі
+      - name: Compute image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Автентифікація через секрет CI (GITHUB_TOKEN)
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=long
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
