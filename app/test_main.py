@@ -8,7 +8,7 @@ client = TestClient(app)
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "DevOps Lab 1 API is running"}
+    assert response.json() == {"message": "wrong message"}
 
 
 def test_create_item():
