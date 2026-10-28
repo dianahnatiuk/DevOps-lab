@@ -1,7 +1,12 @@
+import os
+import socket
+
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, Integer, String
 from app.database import Base, engine, SessionLocal
+
+VERSION = "1.0.0"  # для другого образу змініть на 1.1.0
 
 app = FastAPI()
 
@@ -22,6 +27,19 @@ def get_db():
 @app.get("/")
 def read_root():
     return {"message": "DevOps Lab 1 API is running"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/info")
+def info():
+    return {
+        "version": VERSION,
+        "pod": socket.gethostname(),
+        "greeting": os.getenv("APP_GREETING", "Hello"),
+        "env": os.getenv("APP_ENV", "dev"),
+    }
 
 @app.post("/items/")
 def create_item(name: str, db: Session = Depends(get_db)):

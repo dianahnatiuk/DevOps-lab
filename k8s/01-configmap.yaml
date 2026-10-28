@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devops-app-config
+  namespace: hnatiuk
+data:
+  APP_ENV: "production"
+  APP_GREETING: "Hello from Kubernetes"
+  POSTGRES_DB: "appdb"
+  POSTGRES_USER: "appuser"
