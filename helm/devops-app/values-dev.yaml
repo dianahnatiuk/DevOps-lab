@@ -1,0 +1,26 @@
+# Значення середовища розробки (dev)
+replicaCount: 1
+
+image:
+  tag: "1.0.0"
+
+service:
+  type: NodePort
+  # Фіксований NodePort лише в dev (як у лаб. №3). У values.yaml поле порожнє,
+  # щоб кілька релізів в одному кластері не конфліктували за порт.
+  nodePort: 30080
+
+config:
+  appEnv: "development"
+  appGreeting: "Hello from Helm-managed Kubernetes (Dev)!"
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+ingress:
+  enabled: false

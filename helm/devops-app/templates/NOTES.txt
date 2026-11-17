@@ -1,0 +1,14 @@
+Реліз {{ .Release.Name }} встановлено в namespace {{ .Release.Namespace }}.
+
+Як відкрити застосунок:
+{{- if .Values.ingress.enabled }}
+  Додайте до /etc/hosts рядок "<minikube ip> {{ .Values.ingress.host }}" і відкрийте http://{{ .Values.ingress.host }}{{ .Values.ingress.path }}
+{{- else if eq .Values.service.type "NodePort" }}
+  minikube service {{ include "devops-app.fullname" . }}-svc -n {{ .Release.Namespace }} --url
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "devops-app.fullname" . }}-svc 8080:{{ .Values.service.port }}
+  і відкрийте http://localhost:8080
+{{- end }}
+Перевірка здоров'я: <адреса>{{ .Values.healthPath }}
+
+Тест релізу: helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
