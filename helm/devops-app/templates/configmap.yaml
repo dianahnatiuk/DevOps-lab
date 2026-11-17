@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "devops-app.fullname" . }}-config
+  labels:
+    {{- include "devops-app.labels" . | nindent 4 }}
+data:
+  APP_ENV: {{ .Values.config.appEnv | quote }}
+  APP_GREETING: {{ .Values.config.appGreeting | quote }}
+  POSTGRES_DB: {{ .Values.postgres.dbName | quote }}
+  POSTGRES_USER: {{ .Values.postgres.dbUser | quote }}

@@ -1,0 +1,27 @@
+replicaCount: 4
+
+image:
+  tag: "1.1.0"
+
+config:
+  appEnv: "production"
+  appGreeting: "Hello from PROD environment!"
+
+service:
+  type: ClusterIP
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+postgres:
+  storageSize: 5Gi
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "devops-app.prod.local"
