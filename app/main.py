@@ -32,6 +32,10 @@ def read_root():
 def health():
     return {"status": "ok"}
 
+@app.get("/version")
+def version():
+    return {"version": os.getenv("APP_VERSION", VERSION)}
+
 @app.get("/info")
 def info():
     return {
