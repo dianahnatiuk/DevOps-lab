@@ -1,0 +1,71 @@
+# Значення за замовчуванням — середовище розробки
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/dianahnatiuk/devops-lab
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+containerPort: 8000
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 8000
+  # nodePort: 30080 у лаб. №3; порожнє = Kubernetes призначить порт сам
+  # (потрібно, щоб два релізи в одному кластері не конфліктували)
+  nodePort: ""
+
+# Параметри конфігурації застосунку (потрапляють у ConfigMap)
+config:
+  appEnv: "development"
+  appGreeting: "Hello from Helm-managed Kubernetes (Dev)!"
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+healthPath: /health
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16"
+  dbName: "appdb"
+  dbUser: "appuser"
+  # Реальні паролі у файлах не зберігаємо. Порожній пароль => випадковий,
+  # який зберігається між оновленнями. Свій: --set postgres.dbPassword=...
+  dbPassword: ""
+  port: 5432
+  persistence:
+    enabled: true
+  storageSize: 1Gi
+  storageClass: ""
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+waitForDb:
+  image: busybox:1.36
+
+ingress:
+  enabled: false
+  className: "nginx"
+  host: "devops-app.local"
+  path: /
+
+hooks:
+  preUpgrade:
+    enabled: true
